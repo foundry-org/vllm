@@ -124,6 +124,13 @@ class EngineCore:
 
         self.available_gpu_memory_for_kv_cache = -1
 
+        # foundry: ensure install_hooks runs in this process (CompilationConfig
+        # __post_init__ does not re-fire on pickle/spawn deserialization).
+        if vllm_config.compilation_config.graph_extension_config_path:
+            from vllm.compilation.foundry_shim import install_hooks
+
+            install_hooks(vllm_config.compilation_config)
+
         if envs.VLLM_ELASTIC_EP_SCALE_UP_LAUNCH:
             self._eep_scale_up_before_kv_init()
 

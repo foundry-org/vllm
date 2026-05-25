@@ -697,6 +697,12 @@ class CompilationConfig:
     local_cache_dir: str = field(default=None, init=False)  # type: ignore
     """local cache dir for each rank"""
 
+    graph_extension_config_path: str | None = None
+    """Path to the foundry CUDA graph-extension TOML config. When set,
+    foundry's save/load/replay machinery is installed via runtime
+    monkey-patches in `__post_init__`. When unset, foundry is dormant
+    and vLLM behaves identically to upstream."""
+
     fast_moe_cold_start: bool | None = None
     """Optimization for fast MOE cold start.
 
@@ -1024,6 +1030,14 @@ class CompilationConfig:
 
         if self.backend == "":
             self.backend = current_platform.get_compile_backend()
+
+        # foundry: install runtime hooks if a graph-extension config is set.
+        # Idempotent across processes (parent + workers + EngineCore) and
+        # across re-init.
+        if self.graph_extension_config_path:
+            from vllm.compilation.foundry_shim import install_hooks
+
+            install_hooks(self)
 
     def init_backend(
         self,

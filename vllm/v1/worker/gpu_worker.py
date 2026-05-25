@@ -123,6 +123,14 @@ class Worker(WorkerBase):
             is_driver_worker=is_driver_worker,
         )
 
+        # foundry: ensure install_hooks runs in worker process too.
+        # Idempotent — safe if EngineCore (same process under
+        # UniprocExecutor) already installed.
+        if vllm_config.compilation_config.graph_extension_config_path:
+            from vllm.compilation.foundry_shim import install_hooks
+
+            install_hooks(vllm_config.compilation_config)
+
         # configure float32 matmul precision according to vLLM env.
         precision = envs.VLLM_FLOAT32_MATMUL_PRECISION
         torch.set_float32_matmul_precision(precision)
@@ -277,12 +285,19 @@ class Worker(WorkerBase):
             # memory snapshot
             # This ensures NCCL buffers are allocated before we measure
             # available memory
+            import time
+
+            t_nccl = time.perf_counter()
             init_worker_distributed_environment(
                 self.vllm_config,
                 self.rank,
                 self.distributed_init_method,
                 self.local_rank,
                 current_platform.dist_backend,
+            )
+            logger.info(
+                "[TIMING] NCCL init: %.3f s",
+                time.perf_counter() - t_nccl,
             )
 
             if self.use_v2_model_runner:
