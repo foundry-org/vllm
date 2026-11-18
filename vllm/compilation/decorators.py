@@ -387,8 +387,8 @@ def _support_torch_compile(
         enable_compile = enable_if is None or enable_if(vllm_config)
         # for CompilationMode.STOCK_TORCH_COMPILE , the upper level model runner
         # will handle the compilation, so we don't need to do anything here.
-        # foundry: also disable compile on LOAD — we replay saved graphs and
-        # do not need to re-trace through inductor.
+        # Foundry skips compile on LOAD by default. Opt in when uncaptured
+        # prefill or mixed forwards should still use torch.compile.
         from vllm.compilation.foundry_shim import (
             CUDAGraphExtensionMode,
             get_graph_extension_mode,
@@ -399,10 +399,16 @@ def _support_torch_compile(
             in [CompilationMode.NONE, CompilationMode.STOCK_TORCH_COMPILE]
             or _should_ignore_torch_compile(self.__class__)
             or not enable_compile
-            or get_graph_extension_mode() == CUDAGraphExtensionMode.LOAD
+            or (
+                get_graph_extension_mode() == CUDAGraphExtensionMode.LOAD
+                and os.environ.get("FOUNDRY_LOAD_ALLOW_COMPILE") != "1"
+            )
         )
         if self.do_not_compile:
-            if get_graph_extension_mode() == CUDAGraphExtensionMode.LOAD:
+            if (
+                get_graph_extension_mode() == CUDAGraphExtensionMode.LOAD
+                and os.environ.get("FOUNDRY_LOAD_ALLOW_COMPILE") != "1"
+            ):
                 logger.warning(
                     "Compile is disabled due to graph extension mode is LOAD."
                 )
